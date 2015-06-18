@@ -4,23 +4,95 @@
 using System;
 using System.Data;
 using System.Data.SqlClient;
+using Microsoft.Framework.Logging;
+using Microsoft.Framework.Runtime.Common.CommandLine;
 
 namespace Microsoft.Framework.Caching.SqlServer
 {
     public class Program
     {
-        private string _connectionString;
-        private string _tableName;
-        private SqlQueries _sqlQueries;
+        private string _connectionString = null;
+        private string _schemaName = null;
+        private string _tableName = null;
 
-        public void Main(string[] args)
+        private readonly ILogger _logger;
+
+        public Program()
         {
-            //TODO1: use CommandLine and error checks
-            _connectionString = args[0];
-            _tableName = args[1];
-            _sqlQueries = new SqlQueries(_tableName);
+            // TODO: use CommandOutputLogger?
+            var loggerFactory = new LoggerFactory();
+            loggerFactory.AddConsole();
+            _logger = loggerFactory.CreateLogger<Program>();
 
-            CreateTableAndIndexes();
+            var app = new CommandLineApplication();
+            app.Name = "sqlservercache";
+            app.Description = "Creates tables and indexes in Microsoft SQL Server to be used for distributed caching.";
+
+            app.HelpOption("-?|-h|--help");
+            var optVerbose = app.Option("-v|--verbose", "Verbose output", CommandOptionType.NoValue);
+        }
+
+        public int Main(string[] args)
+        {
+            try
+            {
+                var app = new CommandLineApplication();
+                app.Name = "sqlservercache";
+                app.Description = "Creates table and indexes in Microsoft SQL Server database " +
+                    "to be used for distributed caching";
+
+                app.HelpOption("-?|-h|--help");
+                var optVerbose = app.Option("-v|--verbose", "Verbose output", CommandOptionType.NoValue);
+
+                app.Command("create", command =>
+                {
+                    command.Description = "Creates table and indexes in Microsoft SQL Server database " +
+                    "to be used for distributed caching";
+
+                    var connectionStringArg = command.Argument(
+                        "[connectionString]",
+                        "The connection string to connect to the database.");
+                    var schemaNameArg = command.Argument("[schemaName]", "Name of the table schema.");
+                    var tableNameArg = command.Argument("[tableName]", "Name of the table to be created.");
+                    command.HelpOption("-?|-h|--help");
+
+                    command.OnExecute(() =>
+                    {
+                        if (string.IsNullOrEmpty(connectionStringArg.Value)
+                        || string.IsNullOrEmpty(schemaNameArg.Value)
+                        || string.IsNullOrEmpty(tableNameArg.Value))
+                        {
+                            _logger.LogWarning("Invalid input.");
+                            app.ShowHelp();
+                            return 2;
+                        }
+
+                        _connectionString = connectionStringArg.Value;
+                        _schemaName = schemaNameArg.Value;
+                        _tableName = tableNameArg.Value;
+
+                        CreateTableAndIndexes();
+
+                        _logger.LogInformation("Table and index were created successfully.");
+
+                        return 0;
+                    });
+                });
+
+                // Show help information if no subcommand/option was specified.
+                app.OnExecute(() =>
+                {
+                    app.ShowHelp();
+                    return 2;
+                });
+
+                return app.Execute(args);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogCritical("An error occurred. {Message}", exception.Message);
+                return 1;
+            }
         }
 
         private void CreateTableAndIndexes()
@@ -29,25 +101,39 @@ namespace Microsoft.Framework.Caching.SqlServer
             {
                 connection.Open();
 
-                var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
-
-                try
+                var sqlQueries = new SqlQueries(_schemaName, _tableName);
+                var command = new SqlCommand(sqlQueries.TableInfo, connection);
+                var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+                if (reader.Read())
                 {
-                    var command = new SqlCommand(_sqlQueries.CreateTable, connection, transaction);
-                    command.ExecuteNonQuery();
-
-                    command = new SqlCommand(
-                        _sqlQueries.CreateNonClusteredIndexOnExpirationTime,
-                        connection,
-                        transaction);
-                    command.ExecuteNonQuery();
-
-                    transaction.Commit();
+                    _logger.LogWarning(
+                        $"Table with schema '{_schemaName}' and name '{_tableName}' already exists. " +
+                        "Provide a different table name and try again.");
+                    return;
                 }
-                catch (Exception)
+
+                reader.Dispose();
+
+                using (var transaction = connection.BeginTransaction())
                 {
-                    transaction.Rollback();
-                    throw;
+                    try
+                    {
+                        command = new SqlCommand(sqlQueries.CreateTable, connection, transaction);
+                        command.ExecuteNonQuery();
+
+                        command = new SqlCommand(
+                            sqlQueries.CreateNonClusteredIndexOnExpirationTime,
+                            connection,
+                            transaction);
+                        command.ExecuteNonQuery();
+
+                        transaction.Commit();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("An error occurred while trying to create the table and index.", ex);
+                        transaction.Rollback();
+                    }
                 }
             }
         }

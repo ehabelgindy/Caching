@@ -36,7 +36,7 @@ Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Microsoft.Framework.Caching
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "SqlServerCacheSample", "samples\SqlServerCacheSample\SqlServerCacheSample.xproj", "{FED2ABB6-D0B3-4AC7-940F-250C9767EACB}"
 EndProject
-Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "SqlServerCacheConcurencySample", "samples\SqlServerCacheConcurencySample\SqlServerCacheConcurencySample.xproj", "{C94F2284-AA7A-4DC6-AC90-EAE0BF0DCFAB}"
+Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "SqlServerCacheConcurrencySample", "samples\SqlServerCacheConcurencySample\SqlServerCacheConcurrencySample.xproj", "{C94F2284-AA7A-4DC6-AC90-EAE0BF0DCFAB}"
 EndProject
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Microsoft.Framework.Caching.SqlServer.Tests", "test\Microsoft.Framework.Caching.SqlServer.Tests\Microsoft.Framework.Caching.SqlServer.Tests.xproj", "{38EFEDCC-1076-4E1F-89C5-443C7FCCEE6A}"
 EndProject
